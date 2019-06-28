@@ -1,0 +1,630 @@
+diff --git a/src/io/github/com/javafaktura/s01/e04/SkinnyHenrySystem.java b/src/io/github/com/javafaktura/s01/e04/SkinnyHenrySystem.java
+index 6e2dd08..d21a53d 100644
+--- a/src/io/github/com/javafaktura/s01/e04/SkinnyHenrySystem.java
++++ b/src/io/github/com/javafaktura/s01/e04/SkinnyHenrySystem.java
+@@ -1,29 +1,31 @@
+ package io.github.com.javafaktura.s01.e04;
+ 
+-import java.util.Scanner;
+-
+-import io.github.com.javafaktura.s01.e04.calculator.resolver.MapCalculationStrategyResolver;
+-import io.github.com.javafaktura.s01.e04.calculator.resolver.SwitchCalculationStrategyResolver;
+ import io.github.com.javafaktura.s01.e04.calculator.PriceCalculator;
+-import io.github.com.javafaktura.s01.e04.model.*;
++import io.github.com.javafaktura.s01.e04.calculator.resolver.SizeCalculationStrategyResolver;
++import io.github.com.javafaktura.s01.e04.model.Pizza;
++import io.github.com.javafaktura.s01.e04.model.PizzaBuilder;
++import io.github.com.javafaktura.s01.e04.model.Topping;
++
++import java.util.Scanner;
+ 
+ public class SkinnyHenrySystem {
+ 
+     public static void main(String[] args) {
+-	    new SkinnyHenrySystem().run();
++        new SkinnyHenrySystem().run();
+     }
+ 
+-    void run() {
++    private void run() {
+         System.out.println("What's up! This is Skinny Henry pizzeria system.");
+ 
+         var pizza = createPizza();
+ 
+-        PriceCalculator priceCalculator = new PriceCalculator(pizza, new MapCalculationStrategyResolver());
+-        priceCalculator.calculatePrice();
++        PriceCalculator priceCalculator = new PriceCalculator(pizza, SizeCalculationStrategyResolver::resolver);
++        var price = priceCalculator.calculatePrice();
++        System.out.println("Price: " + price);
+     }
+ 
+     private Pizza createPizza() {
+-        try(Scanner in = new Scanner(System.in)) {
++        try (Scanner in = new Scanner(System.in)) {
+             PizzaBuilder pizzaBuilder = new PizzaBuilder();
+ 
+             System.out.println("Give me name for your pizza");
+@@ -38,16 +40,13 @@ public class SkinnyHenrySystem {
+             System.out.println("Which size? (SMALL, MEDIUM, LARGE, EXTRA_LARGE)");
+             pizzaBuilder.withSize(in.nextLine());
+ 
+-            while (true) {
++            do {
+                 System.out.println("Which topping do you want?");
+                 pizzaBuilder.withTopping(Topping.valueOf(in.nextLine()));
+ 
+                 System.out.println("More toppings? (YES/NO)");
+ 
+-                if (in.nextLine().equals("NO")) {
+-                    break;
+-                }
+-            }
++            } while (!in.nextLine().equals("NO"));
+ 
+             Pizza pizza = pizzaBuilder.build();
+             System.out.println(pizza);
+@@ -55,4 +54,4 @@ public class SkinnyHenrySystem {
+             return pizza;
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/CalculationStrategy.java b/src/io/github/com/javafaktura/s01/e04/calculator/CalculationStrategy.java
+index 500853a..5243a71 100644
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/CalculationStrategy.java
++++ b/src/io/github/com/javafaktura/s01/e04/calculator/CalculationStrategy.java
+@@ -2,7 +2,8 @@ package io.github.com.javafaktura.s01.e04.calculator;
+ 
+ import io.github.com.javafaktura.s01.e04.model.Pizza;
+ 
+-public interface CalculationStrategy {
++import java.util.function.Function;
+ 
+-    int calculate(Pizza pizza);
++@FunctionalInterface
++public interface CalculationStrategy extends Function<Pizza, Integer> {
+ }
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/CalculationStrategyDecorator.java b/src/io/github/com/javafaktura/s01/e04/calculator/CalculationStrategyDecorator.java
+index b950d11..c21f08c 100644
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/CalculationStrategyDecorator.java
++++ b/src/io/github/com/javafaktura/s01/e04/calculator/CalculationStrategyDecorator.java
+@@ -1,10 +1,7 @@
+ package io.github.com.javafaktura.s01.e04.calculator;
+ 
+-abstract class CalculationStrategyDecorator implements CalculationStrategy {
++import java.util.function.Function;
+ 
+-    protected final CalculationStrategy decorated;
+-
+-    protected CalculationStrategyDecorator(CalculationStrategy decorated) {
+-        this.decorated = decorated;
+-    }
++@FunctionalInterface
++public interface CalculationStrategyDecorator extends Function<CalculationStrategy, CalculationStrategy> {
+ }
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/ComputationTimeDecorator.java b/src/io/github/com/javafaktura/s01/e04/calculator/ComputationTimeDecorator.java
+index e60f415..6188336 100644
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/ComputationTimeDecorator.java
++++ b/src/io/github/com/javafaktura/s01/e04/calculator/ComputationTimeDecorator.java
+@@ -1,22 +1,19 @@
+ package io.github.com.javafaktura.s01.e04.calculator;
+ 
+-import java.time.Instant;
+-
+ import io.github.com.javafaktura.s01.e04.model.Pizza;
+ 
+-class ComputationTimeDecorator extends CalculationStrategyDecorator {
++import java.time.Instant;
+ 
+-    ComputationTimeDecorator(CalculationStrategy decorated) {
+-        super(decorated);
+-    }
++class ComputationTimeDecorator {
+ 
+-    @Override
+-    public int calculate(Pizza pizza) {
+-        int before = Instant.now().getNano();
+-        int price = decorated.calculate(pizza);
+-        int after = Instant.now().getNano();
++    static CalculationStrategy timed(CalculationStrategy decorated) {
++        return (Pizza pizza) -> {
++            int before = Instant.now().getNano();
++            int price = decorated.apply(pizza);
++            int after = Instant.now().getNano();
+ 
+-        System.out.println("Calculation time=" + (after - before));
+-        return price;
++            System.out.println("Calculation time=" + (after - before));
++            return price;
++        };
+     }
+ }
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/ExtraLargePizzaCalculationStrategy.java b/src/io/github/com/javafaktura/s01/e04/calculator/ExtraLargePizzaCalculationStrategy.java
+deleted file mode 100644
+index fbe3364..0000000
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/ExtraLargePizzaCalculationStrategy.java
++++ /dev/null
+@@ -1,23 +0,0 @@
+-package io.github.com.javafaktura.s01.e04.calculator;
+-
+-import io.github.com.javafaktura.s01.e04.model.Pizza;
+-
+-import static io.github.com.javafaktura.s01.e04.model.Dough.PLUMB;
+-
+-public class ExtraLargePizzaCalculationStrategy implements CalculationStrategy {
+-
+-    @Override
+-    public int calculate(Pizza pizza) {
+-        int price;
+-        if (pizza.getToppings().size() <= 2) {
+-            price = 40;
+-        } else {
+-            price = 50;
+-        }
+-
+-        if (pizza.getDough() == PLUMB) {
+-            price +=10;
+-        }
+-        return price;
+-    }
+-}
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/LargePizzaCalculationStrategy.java b/src/io/github/com/javafaktura/s01/e04/calculator/LargePizzaCalculationStrategy.java
+deleted file mode 100644
+index 77be4d8..0000000
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/LargePizzaCalculationStrategy.java
++++ /dev/null
+@@ -1,33 +0,0 @@
+-package io.github.com.javafaktura.s01.e04.calculator;
+-
+-import io.github.com.javafaktura.s01.e04.model.Pizza;
+-
+-import static io.github.com.javafaktura.s01.e04.calculator.PriceCalculatorUtils.getMeatToppingsPercentage;
+-import static io.github.com.javafaktura.s01.e04.model.Dough.PLUMB;
+-import static io.github.com.javafaktura.s01.e04.model.Topping.ANANAS;
+-
+-public class LargePizzaCalculationStrategy implements CalculationStrategy {
+-
+-    @Override
+-    public int calculate(Pizza pizza) {
+-        int price;
+-        if (pizza.getToppings().size() <= 3) {
+-            if (getMeatToppingsPercentage(pizza.getToppings()) < 40) {
+-                price = 30;
+-            } else {
+-                price = 35;
+-            }
+-        } else {
+-            if (pizza.getToppings().contains(ANANAS)) {
+-                price = 37;
+-            } else {
+-                price = 40;
+-            }
+-        }
+-
+-        if (pizza.getDough() == PLUMB) {
+-            price += 5;
+-        }
+-        return price;
+-    }
+-}
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/LoggingCalculationDecorator.java b/src/io/github/com/javafaktura/s01/e04/calculator/LoggingCalculationDecorator.java
+index 8cbac5c..e388abe 100644
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/LoggingCalculationDecorator.java
++++ b/src/io/github/com/javafaktura/s01/e04/calculator/LoggingCalculationDecorator.java
+@@ -1,18 +1,15 @@
+ package io.github.com.javafaktura.s01.e04.calculator;
+ 
+-import java.time.LocalDateTime;
+-
+ import io.github.com.javafaktura.s01.e04.model.Pizza;
+ 
+-class LoggingCalculationDecorator extends CalculationStrategyDecorator {
++import java.time.LocalDateTime;
+ 
+-    LoggingCalculationDecorator(CalculationStrategy decorated) {
+-        super(decorated);
+-    }
++class LoggingCalculationDecorator {
+ 
+-    @Override
+-    public int calculate(Pizza pizza) {
+-        System.out.println("Calculation strategy " + decorated + " invoked at " + LocalDateTime.now());
+-        return decorated.calculate(pizza);
++    static CalculationStrategy logged(CalculationStrategy decorated) {
++        return (Pizza pizza) -> {
++            System.out.println("Calculation strategy " + decorated + " invoked at " + LocalDateTime.now());
++            return decorated.apply(pizza);
++        };
+     }
+ }
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/MediumPizzaCalculationStrategy.java b/src/io/github/com/javafaktura/s01/e04/calculator/MediumPizzaCalculationStrategy.java
+deleted file mode 100644
+index bf97b97..0000000
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/MediumPizzaCalculationStrategy.java
++++ /dev/null
+@@ -1,28 +0,0 @@
+-package io.github.com.javafaktura.s01.e04.calculator;
+-
+-import io.github.com.javafaktura.s01.e04.model.Pizza;
+-
+-import static io.github.com.javafaktura.s01.e04.calculator.PriceCalculatorUtils.getMeatToppingsPercentage;
+-
+-public class MediumPizzaCalculationStrategy implements CalculationStrategy {
+-
+-    @Override
+-    public int calculate(Pizza pizza) {
+-        int price;
+-        if (pizza.getToppings().size() <= 3) {
+-            if (getMeatToppingsPercentage(pizza.getToppings()) < 50) {
+-                price = 25;
+-            } else {
+-                price = 27;
+-            }
+-        } else {
+-            if (getMeatToppingsPercentage(pizza.getToppings()) < 40) {
+-                price = 27;
+-            } else {
+-                price = 29;
+-            }
+-        }
+-        return price;
+-
+-    }
+-}
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/PriceCalculator.java b/src/io/github/com/javafaktura/s01/e04/calculator/PriceCalculator.java
+index a83592b..fc9a800 100644
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/PriceCalculator.java
++++ b/src/io/github/com/javafaktura/s01/e04/calculator/PriceCalculator.java
+@@ -1,27 +1,24 @@
+ package io.github.com.javafaktura.s01.e04.calculator;
+ 
+ import io.github.com.javafaktura.s01.e04.calculator.resolver.CalculationStrategyResolver;
+-
+-import java.time.Instant;
+-import java.time.LocalDateTime;
+-
+ import io.github.com.javafaktura.s01.e04.model.Pizza;
+ 
+ public class PriceCalculator {
+     private final Pizza pizza;
+-    private final CalculationStrategyResolver resolver;
++    private final CalculationStrategyResolver priceResolver;
+ 
+-    public PriceCalculator(Pizza pizza, CalculationStrategyResolver resolver) {
++    public PriceCalculator(Pizza pizza, CalculationStrategyResolver priceResolver) {
+         this.pizza = pizza;
+-        this.resolver = resolver;
++        this.priceResolver = priceResolver;
+     }
+ 
+     public int calculatePrice() {
+-        CalculationStrategy calculationStrategy = new LoggingCalculationDecorator(
+-                                                        new ComputationTimeDecorator(
+-                                                            resolver.choosePolicy(pizza.getSize())
+-                                                        )
+-                                                  );
+-        return calculationStrategy.calculate(pizza);
++        CalculationStrategy calculationStrategy =
++                LoggingCalculationDecorator.logged(
++                        ComputationTimeDecorator.timed(
++                                priceResolver.apply(pizza)
++                        )
++                );
++        return calculationStrategy.apply(pizza);
+     }
+ }
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/PriceCalculatorUtils.java b/src/io/github/com/javafaktura/s01/e04/calculator/PriceCalculatorUtils.java
+index be61cc0..727e8ac 100644
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/PriceCalculatorUtils.java
++++ b/src/io/github/com/javafaktura/s01/e04/calculator/PriceCalculatorUtils.java
+@@ -1,16 +1,16 @@
+ package io.github.com.javafaktura.s01.e04.calculator;
+ 
+-import java.util.List;
+-
+ import io.github.com.javafaktura.s01.e04.model.Topping;
+ 
+-class PriceCalculatorUtils {
++import java.util.List;
++
++public class PriceCalculatorUtils {
+ 
+-    static double getMeatToppingsPercentage(List<Topping> toppings) {
++    public static double getMeatToppingsPercentage(List<Topping> toppings) {
+         long count = toppings.stream()
+                 .filter(Topping::isMeat)
+                 .count();
+ 
+-        return ((double) count/(double) toppings.size()) * 100;
++        return ((double) count / (double) toppings.size()) * 100;
+     }
+ }
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/SmallPizzaCalculationStrategy.java b/src/io/github/com/javafaktura/s01/e04/calculator/SmallPizzaCalculationStrategy.java
+deleted file mode 100644
+index 71dbb7b..0000000
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/SmallPizzaCalculationStrategy.java
++++ /dev/null
+@@ -1,17 +0,0 @@
+-package io.github.com.javafaktura.s01.e04.calculator;
+-
+-import io.github.com.javafaktura.s01.e04.model.Pizza;
+-
+-public class SmallPizzaCalculationStrategy implements CalculationStrategy {
+-
+-    @Override
+-    public int calculate(Pizza pizza) {
+-        int price;
+-        if (pizza.getToppings().size() <= 2) {
+-            price = 18;
+-        } else {
+-            price = 22;
+-        }
+-        return price;
+-    }
+-}
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/CalculationStrategyResolver.java b/src/io/github/com/javafaktura/s01/e04/calculator/resolver/CalculationStrategyResolver.java
+index 8ff2500..89abc8b 100644
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/CalculationStrategyResolver.java
++++ b/src/io/github/com/javafaktura/s01/e04/calculator/resolver/CalculationStrategyResolver.java
+@@ -1,9 +1,10 @@
+ package io.github.com.javafaktura.s01.e04.calculator.resolver;
+ 
+ import io.github.com.javafaktura.s01.e04.calculator.CalculationStrategy;
+-import io.github.com.javafaktura.s01.e04.model.Size;
++import io.github.com.javafaktura.s01.e04.model.Pizza;
+ 
+-public interface CalculationStrategyResolver {
++import java.util.function.Function;
+ 
+-    CalculationStrategy choosePolicy(Size size);
++@FunctionalInterface
++public interface CalculationStrategyResolver extends Function<Pizza, CalculationStrategy> {
+ }
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/DummyCalculationStrategyResolver.java b/src/io/github/com/javafaktura/s01/e04/calculator/resolver/DummyCalculationStrategyResolver.java
+deleted file mode 100644
+index 907165c..0000000
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/DummyCalculationStrategyResolver.java
++++ /dev/null
+@@ -1,12 +0,0 @@
+-package io.github.com.javafaktura.s01.e04.calculator.resolver;
+-
+-import io.github.com.javafaktura.s01.e04.calculator.CalculationStrategy;
+-import io.github.com.javafaktura.s01.e04.calculator.ExtraLargePizzaCalculationStrategy;
+-import io.github.com.javafaktura.s01.e04.model.Size;
+-
+-public class DummyCalculationStrategyResolver implements CalculationStrategyResolver {
+-    @Override
+-    public CalculationStrategy choosePolicy(Size size) {
+-        return new ExtraLargePizzaCalculationStrategy();
+-    }
+-}
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/MapCalculationStrategyResolver.java b/src/io/github/com/javafaktura/s01/e04/calculator/resolver/MapCalculationStrategyResolver.java
+deleted file mode 100644
+index f1db84f..0000000
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/MapCalculationStrategyResolver.java
++++ /dev/null
+@@ -1,25 +0,0 @@
+-package io.github.com.javafaktura.s01.e04.calculator.resolver;
+-
+-import java.util.Map;
+-import java.util.Optional;
+-
+-import io.github.com.javafaktura.s01.e04.calculator.*;
+-import io.github.com.javafaktura.s01.e04.model.Size;
+-
+-import static io.github.com.javafaktura.s01.e04.model.Size.*;
+-import static io.github.com.javafaktura.s01.e04.model.Size.MEDIUM;
+-
+-public class MapCalculationStrategyResolver implements CalculationStrategyResolver {
+-
+-    private static final Map<Size, CalculationStrategy> calculators = Map.of(
+-            SMALL, new SmallPizzaCalculationStrategy(),
+-            MEDIUM, new MediumPizzaCalculationStrategy(),
+-            LARGE, new LargePizzaCalculationStrategy(),
+-            EXTRA_LARGE, new ExtraLargePizzaCalculationStrategy()
+-    );
+-
+-    public CalculationStrategy choosePolicy(Size size) {
+-        return Optional.ofNullable(calculators.get(size))
+-                .orElseThrow(() -> new IllegalStateException("Unknown pizza size=" + size));
+-    }
+-}
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/SizeCalculationStrategyResolver.java b/src/io/github/com/javafaktura/s01/e04/calculator/resolver/SizeCalculationStrategyResolver.java
+new file mode 100644
+index 0000000..627f178
+--- /dev/null
++++ b/src/io/github/com/javafaktura/s01/e04/calculator/resolver/SizeCalculationStrategyResolver.java
+@@ -0,0 +1,10 @@
++package io.github.com.javafaktura.s01.e04.calculator.resolver;
++
++import io.github.com.javafaktura.s01.e04.calculator.CalculationStrategy;
++import io.github.com.javafaktura.s01.e04.model.Pizza;
++
++public class SizeCalculationStrategyResolver {
++    public static CalculationStrategy resolver(Pizza p) {
++        return p.getSize();
++    }
++}
+diff --git a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/SwitchCalculationStrategyResolver.java b/src/io/github/com/javafaktura/s01/e04/calculator/resolver/SwitchCalculationStrategyResolver.java
+deleted file mode 100644
+index 741683e..0000000
+--- a/src/io/github/com/javafaktura/s01/e04/calculator/resolver/SwitchCalculationStrategyResolver.java
++++ /dev/null
+@@ -1,23 +0,0 @@
+-package io.github.com.javafaktura.s01.e04.calculator.resolver;
+-
+-import io.github.com.javafaktura.s01.e04.calculator.*;
+-import io.github.com.javafaktura.s01.e04.model.Size;
+-
+-public class SwitchCalculationStrategyResolver implements CalculationStrategyResolver {
+-
+-    @Override
+-    public CalculationStrategy choosePolicy(Size size) {
+-        switch (size) {
+-            case SMALL:
+-                return new SmallPizzaCalculationStrategy();
+-            case MEDIUM:
+-                return new MediumPizzaCalculationStrategy();
+-            case LARGE:
+-                return new LargePizzaCalculationStrategy();
+-            case EXTRA_LARGE:
+-                return new ExtraLargePizzaCalculationStrategy();
+-            default:
+-                throw new IllegalStateException("Unknown size=" + size);
+-        }
+-    }
+-}
+diff --git a/src/io/github/com/javafaktura/s01/e04/model/Pizza.java b/src/io/github/com/javafaktura/s01/e04/model/Pizza.java
+index b33260d..d770885 100644
+--- a/src/io/github/com/javafaktura/s01/e04/model/Pizza.java
++++ b/src/io/github/com/javafaktura/s01/e04/model/Pizza.java
+@@ -6,10 +6,10 @@ public class Pizza {
+     private final String name;
+     private final Dough dough;
+     private final Sauce sauce;
+-    private final Size size;
++    private final SizeCalculationStrategy size;
+     private final List<Topping> toppings;
+ 
+-    public Pizza(String name, Dough dough, Sauce sauce, Size size, List<Topping> toppings) {
++    public Pizza(String name, Dough dough, Sauce sauce, SizeCalculationStrategy size, List<Topping> toppings) {
+         this.name = name;
+         this.dough = dough;
+         this.sauce = sauce;
+@@ -25,7 +25,7 @@ public class Pizza {
+         return sauce;
+     }
+ 
+-    public Size getSize() {
++    public SizeCalculationStrategy getSize() {
+         return size;
+     }
+ 
+diff --git a/src/io/github/com/javafaktura/s01/e04/model/PizzaBuilder.java b/src/io/github/com/javafaktura/s01/e04/model/PizzaBuilder.java
+index 020f56f..67d568f 100644
+--- a/src/io/github/com/javafaktura/s01/e04/model/PizzaBuilder.java
++++ b/src/io/github/com/javafaktura/s01/e04/model/PizzaBuilder.java
+@@ -6,7 +6,7 @@ import java.util.List;
+ public class PizzaBuilder {
+ 
+     private String pizzaName;
+-    private Size size;
++    private SizeCalculationStrategy size;
+     private Sauce sauce;
+     private Dough dough;
+     private List<Topping> toppings = new ArrayList<>();
+@@ -16,7 +16,7 @@ public class PizzaBuilder {
+     }
+ 
+     public void withSize(String sizeValue) {
+-        this.size = Size.valueOf(sizeValue.isBlank() ? "MEDIUM" : sizeValue);
++        this.size = SizeCalculationStrategy.valueOf(sizeValue.isBlank() ? "MEDIUM" : sizeValue);
+     }
+ 
+     public void withSauce(String sauceValue) {
+diff --git a/src/io/github/com/javafaktura/s01/e04/model/Size.java b/src/io/github/com/javafaktura/s01/e04/model/Size.java
+deleted file mode 100644
+index f97384a..0000000
+--- a/src/io/github/com/javafaktura/s01/e04/model/Size.java
++++ /dev/null
+@@ -1,8 +0,0 @@
+-package io.github.com.javafaktura.s01.e04.model;
+-
+-public enum Size {
+-    SMALL,
+-    MEDIUM,
+-    LARGE,
+-    EXTRA_LARGE
+-}
+diff --git a/src/io/github/com/javafaktura/s01/e04/model/SizeCalculationStrategy.java b/src/io/github/com/javafaktura/s01/e04/model/SizeCalculationStrategy.java
+new file mode 100644
+index 0000000..ecfb3b6
+--- /dev/null
++++ b/src/io/github/com/javafaktura/s01/e04/model/SizeCalculationStrategy.java
+@@ -0,0 +1,85 @@
++package io.github.com.javafaktura.s01.e04.model;
++
++import io.github.com.javafaktura.s01.e04.calculator.CalculationStrategy;
++
++import static io.github.com.javafaktura.s01.e04.calculator.PriceCalculatorUtils.getMeatToppingsPercentage;
++import static io.github.com.javafaktura.s01.e04.model.Dough.PLUMB;
++import static io.github.com.javafaktura.s01.e04.model.Topping.ANANAS;
++
++public enum SizeCalculationStrategy implements CalculationStrategy {
++    SMALL {
++        @Override
++        public Integer apply(Pizza pizza) {
++            int price;
++            if (pizza.getToppings().size() <= 2) {
++                price = 18;
++            } else {
++                price = 22;
++            }
++            return price;
++        }
++    },
++
++    MEDIUM {
++        @Override
++        public Integer apply(Pizza pizza) {
++            int price;
++            if (pizza.getToppings().size() <= 3) {
++                if (getMeatToppingsPercentage(pizza.getToppings()) < 50) {
++                    price = 25;
++                } else {
++                    price = 27;
++                }
++            } else {
++                if (getMeatToppingsPercentage(pizza.getToppings()) < 40) {
++                    price = 27;
++                } else {
++                    price = 29;
++                }
++            }
++            return price;
++        }
++    },
++
++    LARGE {
++        @Override
++        public Integer apply(Pizza pizza) {
++            int price;
++            if (pizza.getToppings().size() <= 3) {
++                if (getMeatToppingsPercentage(pizza.getToppings()) < 40) {
++                    price = 30;
++                } else {
++                    price = 35;
++                }
++            } else {
++                if (pizza.getToppings().contains(ANANAS)) {
++                    price = 37;
++                } else {
++                    price = 40;
++                }
++            }
++
++            if (pizza.getDough() == PLUMB) {
++                price += 5;
++            }
++            return price;
++        }
++    },
++
++    EXTRA_LARGE {
++        @Override
++        public Integer apply(Pizza pizza) {
++            int price;
++            if (pizza.getToppings().size() <= 2) {
++                price = 40;
++            } else {
++                price = 50;
++            }
++
++            if (pizza.getDough() == PLUMB) {
++                price += 10;
++            }
++            return price;
++        }
++    }
++}
